@@ -3,3 +3,9 @@
  (modules mvp_demo)
  (libraries yojson veribound-core.verifier)
  (flags (:standard -w -27 -w -33)))
+
+(executable
+ (name demo_garth_response)
+ (modules demo_garth_response)
+ (libraries digestif unix)
+ (flags (:standard -w -27 -w -33)))

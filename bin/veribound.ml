@@ -6,6 +6,7 @@ let usage () =
   print_endline "  veribound verify <sealed.json>";
   print_endline "  veribound seal basel <input.json>      (writes sealed report to results/)";
   print_endline "  veribound verify basel <input.json>    (alias for: seal basel)";
+  print_endline "  veribound sample basel                 (prints example input JSON)";
   exit 1
 
 let read_float_field json field =
@@ -33,6 +34,18 @@ let timestamp_utc_compact () =
   Printf.sprintf "%04d%02d%02d_%02d%02d%02d"
     (tm.Unix.tm_year + 1900) (tm.Unix.tm_mon + 1) tm.Unix.tm_mday
     tm.Unix.tm_hour tm.Unix.tm_min tm.Unix.tm_sec
+
+
+let print_sample_basel () =
+  let sample =
+    `Assoc [
+      ("cet1_capital", `Float 1200000.0);
+      ("risk_weighted_assets", `Float 20000000.0);
+      ("threshold", `Float 0.045)
+    ]
+  in
+  print_endline (Yojson.Basic.pretty_to_string sample);
+  exit 0
 
 let basel_report_from_input input_path =
   let j = Yojson.Basic.from_file input_path in
@@ -104,5 +117,8 @@ let () =
        | Yojson.Json_error m -> prerr_endline ("❌ JSON error: " ^ m); exit 2
        | exn -> prerr_endline ("❌ Unexpected error: " ^ Printexc.to_string exn); exit 2)
 
-  | _ ->
+    | [_; "sample"; "basel"] ->
+      print_sample_basel ()
+
+| _ ->
       usage ()

@@ -1,0 +1,5 @@
+(executable
+ (name veribound)
+ (public_name veribound)
+ (libraries yojson digestif unix veribound-core.verifier)
+ (flags (:standard -w -27 -w -33)))

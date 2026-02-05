@@ -6,6 +6,7 @@ let usage () =
   print_endline "  veribound verify <sealed.json>";
   print_endline "  veribound seal basel <input.json>      (writes sealed report to results/)";
   print_endline "  veribound verify basel <input.json>    (alias for: seal basel)";
+  print_endline "  veribound tamper <sealed.json>         (writes a _TAMPERED copy)";
   print_endline "  veribound sample basel                 (prints example input JSON)";
   exit 1
 
@@ -82,6 +83,54 @@ let seal_report_results results_json =
     ("irrational_signature", `Float irrational_signature)
   ]
 
+
+let tamper_sealed_file input_path =
+  let json = Yojson.Basic.from_file input_path in
+
+  let results =
+    match json |> member "results" with
+    | `Null -> failwith "Missing required field: results"
+    | v -> v
+  in
+
+  let tampered_results =
+    match results |> member "status" with
+    | `String "PASS" ->
+        (* Flip PASS to FAIL *)
+        (match results with
+         | `Assoc fields ->
+             `Assoc (List.map (fun (k,v) -> if k = "status" then (k, `String "FAIL") else (k,v)) fields)
+         | _ -> results)
+    | `String "FAIL" ->
+        (* Flip FAIL to PASS *)
+        (match results with
+         | `Assoc fields ->
+             `Assoc (List.map (fun (k,v) -> if k = "status" then (k, `String "PASS") else (k,v)) fields)
+         | _ -> results)
+    | _ ->
+        (* Otherwise: inject a harmless marker field inside results *)
+        (match results with
+         | `Assoc fields -> `Assoc (("tamper_marker", `String "edited_after_seal") :: fields)
+         | _ -> results)
+  in
+
+  let tampered =
+    match json with
+    | `Assoc fields ->
+        `Assoc (List.map (fun (k,v) -> if k = "results" then (k, tampered_results) else (k,v)) fields)
+    | _ -> json
+  in
+
+  let out_path =
+    if Filename.check_suffix input_path ".json"
+    then (Filename.chop_suffix input_path ".json") ^ "_TAMPERED.json"
+    else input_path ^ "_TAMPERED.json"
+  in
+
+  write_pretty_json out_path tampered;
+  print_endline ("Wrote tampered copy: " ^ out_path);
+  exit 0
+
 let cmd_verify_sealed filename =
   let (ok, msg) = Verifier.verify_seal_from_file filename in
   print_endline msg;
@@ -119,6 +168,12 @@ let () =
 
     | [_; "sample"; "basel"] ->
       print_sample_basel ()
+
+  | [_; "tamper"; sealed_json] ->
+      (try tamper_sealed_file sealed_json with
+       | Failure m -> prerr_endline ("❌ " ^ m); exit 2
+       | Yojson.Json_error m -> prerr_endline ("❌ JSON error: " ^ m); exit 2
+       | exn -> prerr_endline ("❌ Unexpected error: " ^ Printexc.to_string exn); exit 2)
 
 | _ ->
       usage ()

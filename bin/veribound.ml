@@ -4,7 +4,8 @@ open Yojson.Basic.Util
 let usage () =
   print_endline "Usage:";
   print_endline "  veribound verify <sealed.json>";
-  print_endline "  veribound verify basel <input.json>";
+  print_endline "  veribound seal basel <input.json>      (writes sealed report to results/)";
+  print_endline "  veribound verify basel <input.json>    (alias for: seal basel)";
   exit 1
 
 let read_float_field json field =
@@ -26,6 +27,12 @@ let write_pretty_json path json =
   output_string oc (Yojson.Basic.pretty_to_string json);
   output_char oc '\n';
   close_out oc
+
+let timestamp_utc_compact () =
+  let tm = Unix.gmtime (Unix.time ()) in
+  Printf.sprintf "%04d%02d%02d_%02d%02d%02d"
+    (tm.Unix.tm_year + 1900) (tm.Unix.tm_mon + 1) tm.Unix.tm_mday
+    tm.Unix.tm_hour tm.Unix.tm_min tm.Unix.tm_sec
 
 let basel_report_from_input input_path =
   let j = Yojson.Basic.from_file input_path in
@@ -55,10 +62,7 @@ let basel_report_from_input input_path =
 let seal_report_results results_json =
   let results_text = Yojson.Basic.to_string results_json in
   let seal_hash = sha256_hex results_text in
-  (* The verifier does not validate the signature, it only reports it.
-     Keep a stable value for now. *)
   let irrational_signature = Float.pi in
-
   `Assoc [
     ("results", results_json);
     ("seal_hash", `String seal_hash);
@@ -70,13 +74,15 @@ let cmd_verify_sealed filename =
   print_endline msg;
   if ok then exit 0 else exit 2
 
-let cmd_verify_basel input_path =
+let cmd_seal_basel input_path =
   ensure_dir "results";
 
   let results_json = basel_report_from_input input_path in
   let sealed = seal_report_results results_json in
 
-  let out_path = "results/basel_report_sealed.json" in
+  let out_path =
+    "results/basel_report_sealed_" ^ (timestamp_utc_compact ()) ^ ".json"
+  in
   write_pretty_json out_path sealed;
 
   print_endline ("Wrote sealed report: " ^ out_path);
@@ -88,12 +94,15 @@ let cmd_verify_basel input_path =
 
 let () =
   match Array.to_list Sys.argv with
+  | [_; "verify"; sealed_json] ->
+      cmd_verify_sealed sealed_json
+
+  | [_; "seal"; "basel"; input_json]
   | [_; "verify"; "basel"; input_json] ->
-      (try cmd_verify_basel input_json with
+      (try cmd_seal_basel input_json with
        | Failure m -> prerr_endline ("❌ " ^ m); exit 2
        | Yojson.Json_error m -> prerr_endline ("❌ JSON error: " ^ m); exit 2
        | exn -> prerr_endline ("❌ Unexpected error: " ^ Printexc.to_string exn); exit 2)
-  | [_; "verify"; sealed_json] ->
-      cmd_verify_sealed sealed_json
+
   | _ ->
       usage ()
